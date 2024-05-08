@@ -1,0 +1,34 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:12
+    environment:
+      POSTGRES_DB: eurovision
+      POSTGRES_USER: eurovision_user
+      POSTGRES_PASSWORD: securepassword
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  server:
+    build:
+      context: ./server
+    ports:
+      - "3000:3000"
+    environment:
+      POSTGRES_URL: postgresql://eurovision_user:securepassword@db:5432/eurovision
+    depends_on:
+      - db
+
+  client:
+    build:
+      context: ./client
+    ports:
+      - "8080:8080"
+    depends_on:
+      - server
+
+volumes:
+  postgres_data:
+    driver: local

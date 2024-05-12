@@ -2,108 +2,25 @@
   <div id="app">
     <h1>Eurovision Song Contest Ranking</h1>
     <ul>
-      <li v-for="entry in rankings" :key="entry.country" :draggable="true" @dragstart="dragStart(entry, $event)">
-        {{ entry.flag }} {{ entry.country }} - {{ entry.score }}pts
-      </li>
+      <ranking-item v-for="entry in rankings" :key="entry.country" :entry="entry" />
     </ul>
-    <div id="dropAreas">
-      <div :key="point" v-for="point in points" class="drop-area-wrapper">{{ point }}pts<div class="drop-area" :id="point + 'pts'" @dragover.prevent @drop="drop($event, point)" @dragleave="dragLeave($event)">drop here</div></div>
-    </div>
+    <selection-navbar/>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import io, { Socket } from 'socket.io-client';
+import { onMounted } from 'vue';
+import { useRankingStore } from './stores/rankings';
+import RankingItem from './components/RankingItem.vue';
+import SelectionNavbar from './components/SelectionNavbar.vue'; 
+import { storeToRefs } from 'pinia';
 
-// Define an interface for the structure of ranking data
-interface Ranking {
-  country: string;
-  flag: string;
-  score: number;
-}
+const rankingsStore = useRankingStore();
 
-const points = [12, 10, 8, 7, 6, 5, 4, 3, 2, 1]
-
-// Use ref with a type annotation to help TypeScript infer the type of the reactive data
-const rankings = ref<Ranking[]>([]);
-const droppedCountries = ref<string[]>([]); // Keep track of dropped countries
-
-// Declare socket with a proper type
-const socket = ref<Socket | null>(null);
-
-const rankCountry = (country: string, score: number): void => {
-  const index = rankings.value.findIndex(entry => entry.country === country);
-  if (index !== -1) {
-    rankings.value[index].score = score;
-    // Emit an event to the server
-    if (socket.value) {
-      socket.value.emit('rank', { country, score });
-    }
-  }
-};
-
-const dragStart = (entry: Ranking, event: DragEvent) => {
-  event.dataTransfer?.setData('text/plain', JSON.stringify(entry));
-};
-
-const drop = (event: DragEvent, score: number) => {
-  event.preventDefault();
-  const data = JSON.parse(event.dataTransfer!.getData('text/plain'));
-  const currentCountry = event.currentTarget.textContent
-  // Check if the country has already been dropped
-  if (currentCountry !== "drop here") {
-    rankCountry(currentCountry, 0)
-    const index = droppedCountries.value.indexOf(currentCountry);
-    droppedCountries.value.splice(index, 1);
-    event.currentTarget.textContent = '';
-  }
-
-  const index = droppedCountries.value.indexOf(data.country);
-  if (index !== -1) {
-    droppedCountries.value.splice(index, 1);
-    const foundElement = Array.from(document.querySelectorAll('.drop-area')).find(ele => ele.textContent === data.country);
-    if (foundElement) {
-      foundElement.textContent = 'drop here';
-    }
-  }
-
-
-  rankCountry(data.country, score);
-  droppedCountries.value.push(data.country); // Add the country to dropped list
-  event.currentTarget.textContent = data.country;
-
-};
-
-const dragLeave = (event: DragEvent) => {
-  event.preventDefault();
-  const data = JSON.parse(JSON.stringify(event.dataTransfer!.getData('text/plain')));
-  const index = droppedCountries.value.indexOf(data.country);
-  if (index !== -1) {
-    droppedCountries.value.splice(index, 1);
-    rankCountry(data.country, 0); // Reset score to 0 if dragged out
-    event.currentTarget.textContent = "drop here";
-  }
-};
+const { rankings } = storeToRefs(rankingsStore)
 
 onMounted(() => {
-  // Assuming you're still getting the initial rankings from the server
-  socket.value = io('http://192.168.1.192:3000');
-  socket.value.on('data', (data: string) => {
-    console.log('Received data:', data); // Log the received data
-    try {
-      const parsedData = JSON.parse(JSON.stringify(data));
-      parsedData.forEach(d => {
-        document.getElementById(`${d.score.toString()}pts`).textContent = d.country;
-      });
-    } catch (error) {
-      console.error('Error parsing JSON data:', error);
-    }
-  });
-
-  socket.value.on('update', (data: Ranking[]) => {
-    rankings.value = data;
-  });
+  rankingsStore.setSocket();
 });
 </script>
 
@@ -115,8 +32,8 @@ h1 {
 
 ul {
   list-style: decimal-leading-zero;
-  columns: 2;
   font-size: 14pt;
+  padding-bottom: calc(100vh * 0.15);
 }
 
 ul > li {
